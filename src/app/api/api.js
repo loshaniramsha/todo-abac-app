@@ -1,3 +1,0 @@
-<dic>
-    extra clzz
-</dic>

@@ -9,29 +9,17 @@ import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 import TodoCard from "@/component/TodoCard";
 import TodoForm from "@/component/TodoForm";
-import { ListTodo, Filter } from "lucide-react";
-import { useState } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ListTodo, Eye, Trash2, Plus, Shield, AlertCircle } from "lucide-react";
 
-export default function TodosPage() {
+export default function Dashboard() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session, isPending: sessionLoading } = authClient.useSession();
-  const [statusFilter, setStatusFilter] = useState("all");
 
-  // Redirect if not authenticated or not a USER
+  // Redirect if not authenticated
   useEffect(() => {
     if (!sessionLoading && !session) {
       router.push("/login");
-    }
-    if (!sessionLoading && session && session.user.role !== "USER") {
-      router.push("/dashboard");
     }
   }, [session, sessionLoading, router]);
 
@@ -99,17 +87,62 @@ export default function TodosPage() {
     );
   }
 
-  if (!session || session.user.role !== "USER") {
+  if (!session) {
     return null;
   }
 
   const { user } = session;
 
-  // Filter todos based on status
-  const filteredTodos =
-    statusFilter === "all"
-      ? todos
-      : todos.filter((t) => t.status === statusFilter);
+  const getRoleInfo = () => {
+    switch (user.role) {
+      case "USER":
+        return {
+          title: "User Dashboard",
+          description: "Create, view, update, and delete your own todos.",
+          icon: ListTodo,
+          permissions: [
+            { icon: Eye, text: "View your own todos", allowed: true },
+            { icon: Plus, text: "Create new todos", allowed: true },
+            { icon: ListTodo, text: "Update your own todos", allowed: true },
+            { icon: Trash2, text: "Delete your draft todos", allowed: true },
+          ],
+        };
+      case "MANAGER":
+        return {
+          title: "Manager Dashboard",
+          description: "View all todos across the organization.",
+          icon: Eye,
+          permissions: [
+            { icon: Eye, text: "View all todos", allowed: true },
+            { icon: Plus, text: "Create new todos", allowed: false },
+            { icon: ListTodo, text: "Update todos", allowed: false },
+            { icon: Trash2, text: "Delete todos", allowed: false },
+          ],
+        };
+      case "ADMIN":
+        return {
+          title: "Admin Dashboard",
+          description: "View all todos and delete any todo.",
+          icon: Shield,
+          permissions: [
+            { icon: Eye, text: "View all todos", allowed: true },
+            { icon: Plus, text: "Create new todos", allowed: false },
+            { icon: ListTodo, text: "Update todos", allowed: false },
+            { icon: Trash2, text: "Delete any todo", allowed: true },
+          ],
+        };
+      default:
+        return {
+          title: "Dashboard",
+          description: "Unknown role",
+          icon: AlertCircle,
+          permissions: [],
+        };
+    }
+  };
+
+  const roleInfo = getRoleInfo();
+  const RoleIcon = roleInfo.icon;
 
   const stats = {
     total: todos.length,
@@ -124,14 +157,21 @@ export default function TodosPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ListTodo className="h-8 w-8" />
-            My Todos
+            <RoleIcon className="h-8 w-8" />
+            {roleInfo.title}
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your personal todos
-          </p>
+          <p className="text-muted-foreground mt-1">{roleInfo.description}</p>
         </div>
-        <Badge variant="secondary" className="text-sm">
+        <Badge
+          variant={
+            user.role === "ADMIN"
+              ? "destructive"
+              : user.role === "MANAGER"
+              ? "outline"
+              : "secondary"
+          }
+          className="text-sm"
+        >
           {user.role}
         </Badge>
       </div>
@@ -140,23 +180,13 @@ export default function TodosPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card
-          className={`cursor-pointer transition-all ${
-            statusFilter === "all" ? "ring-2 ring-primary" : ""
-          }`}
-          onClick={() => setStatusFilter("all")}
-        >
+        <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-xs text-muted-foreground">Total Todos</p>
           </CardContent>
         </Card>
-        <Card
-          className={`cursor-pointer transition-all ${
-            statusFilter === "draft" ? "ring-2 ring-yellow-500" : ""
-          }`}
-          onClick={() => setStatusFilter("draft")}
-        >
+        <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold text-yellow-600">
               {stats.draft}
@@ -164,12 +194,7 @@ export default function TodosPage() {
             <p className="text-xs text-muted-foreground">Draft</p>
           </CardContent>
         </Card>
-        <Card
-          className={`cursor-pointer transition-all ${
-            statusFilter === "in_progress" ? "ring-2 ring-blue-500" : ""
-          }`}
-          onClick={() => setStatusFilter("in_progress")}
-        >
+        <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold text-blue-600">
               {stats.inProgress}
@@ -177,12 +202,7 @@ export default function TodosPage() {
             <p className="text-xs text-muted-foreground">In Progress</p>
           </CardContent>
         </Card>
-        <Card
-          className={`cursor-pointer transition-all ${
-            statusFilter === "completed" ? "ring-2 ring-green-500" : ""
-          }`}
-          onClick={() => setStatusFilter("completed")}
-        >
+        <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold text-green-600">
               {stats.completed}
@@ -192,65 +212,76 @@ export default function TodosPage() {
         </Card>
       </div>
 
+      {/* Permissions Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Your Permissions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {roleInfo.permissions.map((perm, idx) => {
+              const PermIcon = perm.icon;
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-2 p-2 rounded ${
+                    perm.allowed
+                      ? "text-green-600 bg-green-50 dark:bg-green-950"
+                      : "text-muted-foreground bg-muted"
+                  }`}
+                >
+                  <PermIcon className="h-4 w-4" />
+                  <span className="text-sm">{perm.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Todo Form */}
-        <div className="lg:col-span-1">
-          <TodoForm
-            onSubmit={(data) => createMutation.mutateAsync(data)}
-            isSubmitting={createMutation.isPending}
-          />
-        </div>
+        {/* Todo Form - Only for USER role */}
+        {user.role === "USER" && (
+          <div className="lg:col-span-1">
+            <TodoForm
+              onSubmit={(data) => createMutation.mutateAsync(data)}
+              isSubmitting={createMutation.isPending}
+            />
+          </div>
+        )}
 
         {/* Todos List */}
-        <div className="lg:col-span-2">
+        <div className={user.role === "USER" ? "lg:col-span-2" : "lg:col-span-3"}>
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <span>Todos</span>
-                  {todosLoading && (
-                    <span className="text-sm text-muted-foreground font-normal">
-                      Loading...
-                    </span>
-                  )}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-35">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              <CardTitle className="flex items-center justify-between">
+                <span>
+                  {user.role === "USER" ? "My Todos" : "All Todos"}
+                </span>
+                {todosLoading && (
+                  <span className="text-sm text-muted-foreground">
+                    Loading...
+                  </span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {todosError ? (
                 <div className="text-destructive text-center py-8">
                   Error loading todos. Please try again.
                 </div>
-              ) : filteredTodos.length === 0 ? (
+              ) : todos.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ListTodo className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>
-                    {statusFilter === "all"
-                      ? "No todos found."
-                      : `No ${statusFilter.replace("_", " ")} todos.`}
-                  </p>
-                  {statusFilter === "all" && (
-                    <p className="text-sm">Create your first todo!</p>
+                  <p>No todos found.</p>
+                  {user.role === "USER" && (
+                    <p className="text-sm">Create your first todo above!</p>
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {filteredTodos.map((todo) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {todos.map((todo) => (
                     <TodoCard
                       key={todo.id}
                       todo={todo}

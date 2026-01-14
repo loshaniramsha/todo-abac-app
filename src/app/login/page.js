@@ -1,114 +1,119 @@
-// export default function LoginPage() {
-//     return (
-//         <div className="p-6">
-//             <h1 className="text-xl font-bold">Welcome to Login</h1>
-//             <p>Select role for demo (USER / MANAGER / ADMIN)</p>
-//         </div>
-
-//     )
-// }
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-// import { ROLES } from "@/lib/roles";
-import { ROLES } from "@/lib/role";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export default function LoginPage() {
-  const [isSignup, setIsSignup] = useState(false);
+export default function SignIn() {
+  const router = useRouter();
+  const { data: session, isPending } = authClient.useSession();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!isPending && session) {
+      router.push("/dashboard");
+    }
+  }, [session, isPending, router]);
 
   const [form, setForm] = useState({
-    username: "",
+    email: "",
     password: "",
-    role: ROLES.USER,
   });
 
+  const [loading, setLoading] = useState(false);
+
   const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
-  const handleSubmit = () => {
-    if (isSignup) {
-      console.log("SIGN UP DATA", form);
-    } else {
-      console.log("SIGN IN DATA", {
-        username: form.username,
-        password: form.password,
-      });
+  const handleSubmit = async () => {
+    if (loading) return;
+
+    const { email, password } = form;
+
+    if (!email || !password) {
+      alert("Email and password are required");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await authClient.signIn.email(
+        {
+          email,
+          password,
+          callbackURL: "/dashboard",
+          rememberMe: true,
+        },
+        {
+          onSuccess: () => {
+            router.push("/dashboard");
+          },
+          onError: (ctx) => {
+            alert(ctx.error.message);
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Sign in error:", error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (session) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted px-4">
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader>
-          <CardTitle className="text-center text-2xl">
-            {isSignup ? "Create Account" : "Welcome Back"}
-          </CardTitle>
+          <CardTitle className="text-center text-2xl">Welcome Back</CardTitle>
           <p className="text-center text-sm text-muted-foreground">
-            {isSignup
-              ? "Sign up to start managing your todos"
-              : "Sign in to continue"}
+            Sign in to continue
           </p>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Username */}
           <Input
-            placeholder="Username"
-            value={form.username}
-            onChange={e => handleChange("username", e.target.value)}
+            placeholder="Email"
+            value={form.email}
+            onChange={(e) => handleChange("email", e.target.value)}
           />
 
-          {/* Password */}
           <Input
             type="password"
             placeholder="Password"
             value={form.password}
-            onChange={e => handleChange("password", e.target.value)}
+            onChange={(e) => handleChange("password", e.target.value)}
           />
 
-          {/* Role (Only for Signup) */}
-          {isSignup && (
-            <Select
-              value={form.role}
-              onValueChange={value => handleChange("role", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ROLES.USER}>User</SelectItem>
-                <SelectItem value={ROLES.MANAGER}>Manager</SelectItem>
-                <SelectItem value={ROLES.ADMIN}>Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* Action Button */}
-          <Button className="w-full" onClick={handleSubmit}>
-            {isSignup ? "Sign Up" : "Sign In"}
+          <Button className="w-full" onClick={handleSubmit} disabled={loading}>
+            {loading ? "Signing In..." : "Sign In"}
           </Button>
 
-          {/* Toggle */}
-          <p className="text-center text-sm">
-            {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button
-              className="text-primary font-medium hover:underline"
-              onClick={() => setIsSignup(!isSignup)}
-            >
-              {isSignup ? "Sign In" : "Sign Up"}
-            </button>
+          <p className="text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="text-primary hover:underline">
+              Sign up
+            </Link>
           </p>
         </CardContent>
       </Card>
