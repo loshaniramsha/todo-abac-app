@@ -1,36 +1,202 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+1. Project Overview (for Report – Introduction)
 
-## Getting Started
+This project is a full-stack Todo Application developed as part of an Intern Software Engineer take-home test. The system allows users to manage personal todos while enforcing Attribute-Based Access Control (ABAC) using user roles and todo status.
+The application supports:
+* Secure authentication using Better Auth
+* Role-based authorization (User, Manager, Admin)
+* Modern frontend using Next.js (App Router) and shadcn/ui
+* Efficient data fetching with TanStack Query
+* 
 
-First, run the development server:
+2. System Architecture (High Level)
+Frontend
+* Next.js (App Router)
+* shadcn/ui for UI components
+* TanStack Query for API state management
+Backend
+* API routes (Next.js)
+* MySQL database
+* Better Auth for authentication & session handling
+Database
+* MySQL
+* 5 main tables:
+    * user
+    * todos
+    * account
+    * session
+    * verification
+    * 
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+3. Database Design (Step-by-Step)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3.1 User Table
+Stores registered users and their roles.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+CREATE TABLE user (
+  id VARCHAR(36) PRIMARY KEY,
+  name VARCHAR(100),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  emailVerified TINYINT(1) NOT NULL DEFAULT 0,
+  image VARCHAR(500),
+  role ENUM('USER','MANAGER','ADMIN') NOT NULL DEFAULT 'USER',
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+Purpose
+* Identifies users
+* Stores role for ABAC decisions
+* Tracks email verification
+* 
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3.2 Todos Table
+Stores todo items created by users.
 
-## Learn More
+CREATE TABLE todos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  status ENUM('draft','in_progress','completed') NOT NULL DEFAULT 'draft',
+  user_id VARCHAR(36) NOT NULL,
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+);
 
-To learn more about Next.js, take a look at the following resources:
+Purpose
+* Each todo belongs to a user
+* status is an attribute used in ABAC
+* Enforces ownership using user_id
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3.3 Account Table (Authentication)
+Stores login credentials and OAuth-related data.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+CREATE TABLE account (
+  id VARCHAR(36) PRIMARY KEY,
+  userId VARCHAR(36) NOT NULL,
+  accountId VARCHAR(255) NOT NULL,
+  providerId VARCHAR(50) NOT NULL,
+  password VARCHAR(255),
+  accessToken TEXT,
+  refreshToken TEXT,
+  accessTokenExpiresAt TIMESTAMP,
+  refreshTokenExpiresAt TIMESTAMP,
+  scope VARCHAR(255),
+  idToken TEXT,
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
+);
 
-## Deploy on Vercel
+Purpose
+* Supports Better Auth
+* Handles credentials and OAuth providers
+* 
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3.4 Session Table
+Manages logged-in sessions.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+CREATE TABLE session (
+  id VARCHAR(36) PRIMARY KEY,
+  userId VARCHAR(36) NOT NULL,
+  token VARCHAR(255) NOT NULL UNIQUE,
+  expiresAt TIMESTAMP NOT NULL,
+  ipAddress VARCHAR(45),
+  userAgent VARCHAR(255),
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
+);
+Purpose
+* Tracks active user sessions
+* Improves security and session validation
+
+3.5 Verification Table
+Used for email verification and password resets.
+
+CREATE TABLE verification (
+  id VARCHAR(36) PRIMARY KEY,
+  identifier VARCHAR(255) NOT NULL,
+  value VARCHAR(255) NOT NULL,
+  expiresAt TIMESTAMP NOT NULL,
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+Purpose
+* Handles email verification tokens
+* Supports secure authentication flows
+
+4. ABAC Model Implementation (Core Concept)
+Attributes Used
+* User Attribute: role
+* Resource Attribute: todo.status
+* Ownership Attribute: todo.user_id
+
+5. Permission Rules (Report Section)
+5.1 User Role
+Action	Rule
+View Todos	Can view only their own todos
+Create Todos	Allowed
+Update Todos	Allowed (own todos only)
+Delete Todos	Only if status = draft
+-- User: View own todos
+SELECT * FROM todos WHERE user_id = :userId;
+
+-- User: Delete own draft todos
+DELETE FROM todos 
+WHERE id = :todoId 
+AND user_id = :userId 
+AND status = 'draft';
+
+5.2 Manager Role
+Action	Rule
+View Todos	Can view all todos
+Create	❌
+Update	❌
+Delete	❌
+-- Manager: View all todos
+SELECT todos.*, user.name 
+FROM todos 
+JOIN user ON todos.user_id = user.id;
+
+5.3 Admin Role
+Action	Rule
+View Todos	Can view all todos
+Create	❌
+Update	❌
+Delete	Can delete any todo
+-- Admin: Delete any todo
+DELETE FROM todos WHERE id = :todoId;
+
+6. Step-by-Step Project Workflow
+Step 1: Setup Project
+* Create Next.js App (App Router)
+* Install shadcn/ui
+* Configure MySQL
+* Setup Better Auth
+
+Step 2: Database Setup
+* Create all tables
+* Add foreign keys
+* Test CRUD queries
+
+Step 3: Authentication
+* User registration
+* Email verification
+* Session management
+
+Step 4: Todo CRUD APIs
+* Create todo
+* Fetch todos (based on role)
+* Update todo
+* Delete todo (ABAC enforced)
+
+Step 5: ABAC Enforcement
+* Check user role
+* Check todo owner
+* Check todo status
+* Allow or deny action
+
+Step 6: Frontend Integration
+* Use TanStack Query for API calls
+* Show UI based on permissions
+* Hide unauthorized actions
