@@ -1,6 +1,6 @@
-1. Project Overview (for Report – Introduction)
+1. Project Overview & Step steps
 
-This project is a full-stack Todo Application developed as part of an Intern Software Engineer take-home test. The system allows users to manage personal todos while enforcing Attribute-Based Access Control (ABAC) using user roles and todo status.
+This project is a full-stack Todo Application.  The system allows users to manage personal todos while enforcing Attribute-Based Access Control (ABAC) using user roles and todo status.
 The application supports:
 * Secure authentication using Better Auth
 * Role-based authorization (User, Manager, Admin)
